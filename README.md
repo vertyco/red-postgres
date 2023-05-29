@@ -25,7 +25,61 @@ cog-folder/
 ```
 ![SCHEMA](.github/ASSETS/schema.png)
 
-# piccolo_conf.py
+# Cog Usage
+```python
+import asyncio
+import logging
+
+from piccolo.engine.postgres import PostgresEngine
+from redbot.core import commands
+from redbot.core.bot import Red
+
+from red_postgres import register_cog
+from .db.tables import MyTable
+
+
+class PiccoloTemplate(commands.Cog):
+    def __init__(self, bot: Red, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bot = bot
+        self.db: PostgresEngine = None
+
+    async def cog_load(self):
+        asyncio.create_task(self.setup())
+
+    async def setup(self):
+        await self.bot.wait_until_red_ready()
+        config = await self.bot.get_shared_api_tokens("piccolo")
+        self.db, migration_result_message = await register_cog(self, config, [MyTable])
+
+    async def cog_unload(self):
+        if self.db:
+            await self.db.close_connection_pool()
+```
+The shared api token config for piccolo should be the following:
+```json
+{
+  "database": "database name",
+  "host": "host ip",
+  "port": "port",
+  "user": "user",
+  "password": "password"
+}
+```
+The register method connects to the database, creates the database for that cog, registers any tables, runs any migrations, sets the new engine object to all tables, and returns the raw engine object.
+
+You can then use your piccolo table methods like so:
+```python
+count = await MyTable.count()
+or
+objects = await MyTable.objects().where(MyTable.text == "Hello World")
+```
+The engine associated with your tables after registering the cog is connected to the database named the same as the cog that registered them.
+ - *If your cog's name is `MyCog` then the database will be named `my_cog`*
+
+# Piccolo Configuration Files
+Your piccolo configuration files must be setup like so. This is really only used for migrations.
+### piccolo_conf.py
 ```python
 import os
 
@@ -46,7 +100,7 @@ DB = PostgresEngine(
 APP_REGISTRY = AppRegistry(apps=["db.piccolo_app"])
 ```
 
-# piccolo_app.py
+### piccolo_app.py
 ```python
 import os
 
