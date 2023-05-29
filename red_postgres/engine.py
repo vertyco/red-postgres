@@ -18,7 +18,7 @@ def acquire_db_engine(config: dict) -> PostgresEngine:
 
 
 async def create_database_and_tables(
-    cog: Cog, config: dict, tables: list[type[Table]]
+    cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
 ) -> PostgresEngine:
     """Connect to postgres, create database/tables and return engine
 
@@ -26,6 +26,7 @@ async def create_database_and_tables(
         cog (Cog): Cog instance
         config (dict): database connection info
         tables (list[type[Table]]): list of piccolo table subclasses
+        max_size (int): maximum number of database connections, 20 by default
 
     Returns:
         PostgresEngine instance
@@ -48,7 +49,7 @@ async def create_database_and_tables(
     # Connect to the new database
     config["database"] = cog_name
     engine = await asyncio.to_thread(acquire_db_engine, config)
-    await engine.start_connection_pool()
+    await engine.start_connection_pool(max_size=max_size)
 
     # Update table engines
     for table_class in tables:
@@ -110,7 +111,7 @@ async def run_migrations(cog: Cog, config: dict):
 
 
 async def register_cog(
-    cog: Cog, config: dict, tables: list[type[Table]]
+    cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
 ) -> tuple[PostgresEngine, str]:
     """Registers a cog by creating a database for it and initializing any tables it has
 
@@ -118,10 +119,11 @@ async def register_cog(
         cog (Cog): Cog instance
         config (dict): database connection info
         tables (list[type[Table]]): list of piccolo table subclasses
+        max_size (int): maximum number of database connections, 20 by default
 
     Returns:
         Tuple[PostgresEngine, str]: Postgres Engine instance, migration results
     """
-    engine = await create_database_and_tables(cog, config, tables)
+    engine = await create_database_and_tables(cog, config, tables, max_size)
     result = await run_migrations(cog, config)
     return engine, result
