@@ -9,7 +9,7 @@ from discord.ext.commands import Cog
 from piccolo.engine.postgres import PostgresEngine
 from piccolo.table import Table, create_db_tables
 
-log = logging.getLogger("red.postgres.engine")
+log = logging.getLogger("red.red-postgres.engine")
 
 
 def acquire_db_engine(config: dict) -> PostgresEngine:
