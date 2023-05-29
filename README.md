@@ -1,18 +1,17 @@
 # red-postgres
 
-Piccolo Postgres integration for Red-DiscordBot
+Piccolo Postgres integration for Red-DiscordBot, although it could be used with any dpy bot as an easy wrapper for making postgres with cogs more modular.
 
 ![Py](https://img.shields.io/badge/python-v3.11-yellow?style=for-the-badge)
 ![black](https://img.shields.io/badge/style-black-000000?style=for-the-badge&?link=https://github.com/psf/black)
 ![license](https://img.shields.io/github/license/Vertyco/red-postgres?style=for-the-badge)
 
-
 ![Forks](https://img.shields.io/github/forks/Vertyco/red-postgres?style=for-the-badge&color=9cf)
 ![Stars](https://img.shields.io/github/stars/Vertyco/red-postgres?style=for-the-badge&color=yellow)
 ![Lines of code](https://img.shields.io/tokei/lines/github/Vertyco/red-postgres?color=ff69b4&label=Lines&style=for-the-badge)
 
-
 # File structure for using with cogs
+
 ```
 cog-folder/
     ├── db/
@@ -23,9 +22,11 @@ cog-folder/
     ├── __init__.py
     ├── cog.py
 ```
+
 ![SCHEMA](.github/ASSETS/schema.png)
 
 # Cog Usage
+
 ```python
 import asyncio
 
@@ -55,7 +56,9 @@ class PiccoloTemplate(commands.Cog):
         if self.db:
             await self.db.close_connection_pool()
 ```
+
 The shared api token config for piccolo should be the following:
+
 ```json
 {
   "database": "database_name",
@@ -65,21 +68,29 @@ The shared api token config for piccolo should be the following:
   "password": "password123"
 }
 ```
+
 The register method connects to the database specified in config, creates the a new database with the name of the registering cog, registers any tables, runs any migrations, sets the new engine object to all tables, and returns the raw engine object.
 
 You can then use your piccolo table methods like so:
+
 ```python
 count = await MyTable.count()
 or
 objects = await MyTable.objects().where(MyTable.text == "Hello World")
 ```
+
 The engine associated with your tables after registering the cog is connected to the database named the same as the cog that registered them, thus using this integration with multiple cogs will not interfere, as each cog will create its own database.
- - *If your cog's name is `MyCog` then the database will be named `my_cog`*
+
+- _If your cog's name is `MyCog` then the database will be named `my_cog`_
 
 # Piccolo Configuration Files
+
 Your piccolo configuration files must be setup like so. This is really only used for migrations.
-- *When migrations are run, the os environment variables are mocked in subprocess, so there should be no conflicts*
+
+- _When migrations are run, the os environment variables are mocked in subprocess, so there should be no conflicts_
+
 ### piccolo_conf.py
+
 ```python
 import os
 
@@ -101,6 +112,7 @@ APP_REGISTRY = AppRegistry(apps=["db.piccolo_app"])
 ```
 
 ### piccolo_app.py
+
 ```python
 import os
 
@@ -114,4 +126,5 @@ APP_CONFIG = AppConfig(
     migrations_folder_path=os.path.join(CURRENT_DIRECTORY, "migrations"),
 )
 ```
+
 for `table_classes` add in the list of tables you're using
