@@ -4,7 +4,6 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import List, Tuple, Type
 
 from discord.ext.commands import Cog
 from piccolo.engine.postgres import PostgresEngine
@@ -19,16 +18,14 @@ def acquire_db_engine(config: dict) -> PostgresEngine:
 
 
 async def create_database_and_tables(
-    cog: Cog,
-    config: dict,
-    tables: List[Type[Table]],
+    cog: Cog, config: dict, tables: list[type[Table]]
 ) -> PostgresEngine:
     """Connect to postgres, create database/tables and return engine
 
     Args:
         cog (Cog): Cog instance
         config (dict): database connection info
-        tables (List[Type[Table]]): list of piccolo table subclasses
+        tables (list[type[Table]]): list of piccolo table subclasses
 
     Returns:
         PostgresEngine instance
@@ -113,14 +110,14 @@ async def run_migrations(cog: Cog, config: dict):
 
 
 async def register_cog(
-    cog: Cog, config: dict, tables: List[Type[Table]]
-) -> Tuple[PostgresEngine, str]:
+    cog: Cog, config: dict, tables: list[type[Table]]
+) -> tuple[PostgresEngine, str]:
     """Registers a cog by creating a database for it and initializing any tables it has
 
     Args:
         cog (Cog): Cog instance
         config (dict): database connection info
-        tables (List[Type[Table]]): list of piccolo table subclasses
+        tables (list[type[Table]]): list of piccolo table subclasses
 
     Returns:
         Tuple[PostgresEngine, str]: Postgres Engine instance, migration results

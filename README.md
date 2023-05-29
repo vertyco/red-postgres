@@ -2,6 +2,16 @@
 
 Piccolo Postgres integration for Red-DiscordBot
 
+![Py](https://img.shields.io/badge/python-v3.11-yellow?style=for-the-badge)
+![black](https://img.shields.io/badge/style-black-000000?style=for-the-badge&?link=https://github.com/psf/black)
+![license](https://img.shields.io/github/license/Vertyco/red-postgres?style=for-the-badge)
+
+
+![Forks](https://img.shields.io/github/forks/Vertyco/red-postgres?style=for-the-badge&color=9cf)
+![Stars](https://img.shields.io/github/stars/Vertyco/red-postgres?style=for-the-badge&color=yellow)
+![Lines of code](https://img.shields.io/tokei/lines/github/Vertyco/red-postgres?color=ff69b4&label=Lines&style=for-the-badge)
+
+
 # File structure for using with cogs
 ```
 cog-folder/
