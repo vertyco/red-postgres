@@ -9,9 +9,11 @@ cog-folder/
     │   ├── migrations/
     │   ├── piccolo_conf.py
     │   ├── piccolo_app.py
+    │   ├── tables.py
     ├── __init__.py
     ├── cog.py
 ```
+![SCHEMA](.github\ASSETS\schema.png)
 
 # piccolo_conf.py
 ```python
