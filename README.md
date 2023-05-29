@@ -28,7 +28,6 @@ cog-folder/
 # Cog Usage
 ```python
 import asyncio
-import logging
 
 from piccolo.engine.postgres import PostgresEngine
 from redbot.core import commands
@@ -59,14 +58,14 @@ class PiccoloTemplate(commands.Cog):
 The shared api token config for piccolo should be the following:
 ```json
 {
-  "database": "database name",
-  "host": "host ip",
-  "port": "port",
-  "user": "user",
-  "password": "password"
+  "database": "database_name",
+  "host": "host ip (127.0.0.1)",
+  "port": "port (5432)",
+  "user": "user123",
+  "password": "password123"
 }
 ```
-The register method connects to the database, creates the database for that cog, registers any tables, runs any migrations, sets the new engine object to all tables, and returns the raw engine object.
+The register method connects to the database specified in config, creates the a new database with the name of the registering cog, registers any tables, runs any migrations, sets the new engine object to all tables, and returns the raw engine object.
 
 You can then use your piccolo table methods like so:
 ```python
@@ -74,11 +73,12 @@ count = await MyTable.count()
 or
 objects = await MyTable.objects().where(MyTable.text == "Hello World")
 ```
-The engine associated with your tables after registering the cog is connected to the database named the same as the cog that registered them.
+The engine associated with your tables after registering the cog is connected to the database named the same as the cog that registered them, thus using this integration with multiple cogs will not interfere, as each cog will create its own database.
  - *If your cog's name is `MyCog` then the database will be named `my_cog`*
 
 # Piccolo Configuration Files
 Your piccolo configuration files must be setup like so. This is really only used for migrations.
+- *When migrations are run, the os environment variables are mocked in subprocess, so there should be no conflicts*
 ### piccolo_conf.py
 ```python
 import os
