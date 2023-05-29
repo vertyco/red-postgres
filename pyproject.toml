@@ -1,9 +1,9 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "discord.py==2.2.3", "piccolo[postgres]==0.113.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "red_postgres_Vertyco"
+name = "red-postgres"
 version = "0.0.1"
 authors = [
   { name="Vertyco" },
@@ -13,7 +13,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GPL v2.0 License",
+    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
     "Operating System :: OS Independent",
 ]
 
