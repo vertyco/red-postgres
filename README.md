@@ -13,7 +13,7 @@ cog-folder/
     ├── __init__.py
     ├── cog.py
 ```
-![SCHEMA](.github\ASSETS\schema.png)
+![SCHEMA](.github/ASSETS/schema.png)
 
 # piccolo_conf.py
 ```python
