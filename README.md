@@ -179,4 +179,4 @@ if __name__ == "__main__":
 
 ```
 
-You would have a similar file for each cog of your cogs, here you would create the migrations to include in your cog folder for users to run when the load up the cog.
+You would have a similar file in the root of each of your cog folders, here you would create the migrations to include in your cog folder for users to run when they load up the cog.
