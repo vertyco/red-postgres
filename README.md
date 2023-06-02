@@ -71,6 +71,8 @@ The shared api token config for piccolo should be the following:
 
 The register method connects to the database specified in config, creates the a new database with the name of the registering cog, registers any tables, runs any migrations, sets the new engine object to all tables, and returns the raw engine object.
 
+- The name of the database will be the the name of the cog's folder, not the name of the main cog.py file
+
 You can then use your piccolo table methods like so:
 
 ```python
