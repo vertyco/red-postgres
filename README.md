@@ -128,3 +128,55 @@ APP_CONFIG = AppConfig(
 ```
 
 for `table_classes` add in the list of tables you're using
+
+# Local development and making migrations
+
+Handing migrations is up to you, but one way to do it is to make migrations locally like so:
+
+```python
+import os
+import subprocess
+from pathlib import Path
+
+root = Path(__file__).parent
+env = os.environ.copy()
+env["PICCOLO_CONF"] = "db.piccolo_conf"
+env["POSTGRES_HOST"] = "localhost"
+env["POSTGRES_PORT"] = "5432"
+env["POSTGRES_USER"] = "user"
+env["POSTGRES_PASSWORD"] = "password123!"
+env["POSTGRES_DATABASE"] = "templatecog"
+env["PYTHONIOENCODING"] = "utf-8"
+
+
+def make():
+    migration_result = subprocess.run(
+        ["piccolo", "migrations", "new", root.name, "--auto"],
+        env=env,
+        cwd=root,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    ).stdout.decode()
+    print(migration_result)
+
+
+def run():
+    run_result = subprocess.run(
+        ["piccolo", "migrations", "forward", root.name],
+        env=env,
+        cwd=root,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    ).stdout.decode()
+    print(run_result)
+
+
+if __name__ == "__main__":
+    make()
+    run()
+
+```
+
+You would have a similar file for each cog of your cogs, here you would create the migrations to include in your cog folder for users to run when the load up the cog.

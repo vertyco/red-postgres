@@ -12,27 +12,14 @@ from piccolo.table import Table, create_db_tables
 log = logging.getLogger("red.red-postgres.engine")
 
 
-def acquire_db_engine(config: dict) -> PostgresEngine:
-    """This is ran in executor since it blocks if connection info is bad"""
-    return PostgresEngine(config=config)
-
-
-async def create_database_and_tables(
-    cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
-) -> PostgresEngine:
-    """Connect to postgres, create database/tables and return engine
+async def create_database(cog: Cog, config: dict) -> None:
+    """Create cog's database if it doesnt exist
 
     Args:
         cog (Cog): Cog instance
-        config (dict): database connection info
-        tables (list[type[Table]]): list of piccolo table subclasses
-        max_size (int): maximum number of database connections, 20 by default
-
-    Returns:
-        PostgresEngine instance
+        config (dict): Postgres connection information
     """
-    log.debug("Initializing database")
-    engine = await asyncio.to_thread(acquire_db_engine, config)
+    engine = await asyncio.to_thread(_acquire_db_engine, config)
     await engine.start_connection_pool()
 
     # Check if the database exists
@@ -46,9 +33,24 @@ async def create_database_and_tables(
     # Close old database connection
     await engine.close_connection_pool()
 
+
+async def create_tables(
+    cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
+) -> PostgresEngine:
+    """Connect to postgres, create database/tables and return engine
+
+    Args:
+        cog (Cog): Cog instance
+        config (dict): database connection info
+        tables (list[type[Table]]): list of piccolo table subclasses
+        max_size (int): maximum number of database connections, 20 by default
+
+    Returns:
+        PostgresEngine instance
+    """
     # Connect to the new database
-    config["database"] = cog_name
-    engine = await asyncio.to_thread(acquire_db_engine, config)
+    config["database"] = cog.__class__.__name__.lower()
+    engine = await asyncio.to_thread(_acquire_db_engine, config)
     await engine.start_connection_pool(max_size=max_size)
 
     # Update table engines
@@ -68,7 +70,8 @@ async def run_migrations(cog: Cog, config: dict):
 
     Args:
         cog (Cog): Cog instance
-        config (dict): Database connection info
+        config (dict): database connection info
+        make (bool): automatically make new migrations, False by default
 
     Returns:
         str: Results of the migration
@@ -76,36 +79,36 @@ async def run_migrations(cog: Cog, config: dict):
 
     def run():
         root = Path(inspect.getfile(cog.__class__)).parent
-        env = os.environ.copy()
-        env["PICCOLO_CONF"] = "db.piccolo_conf"
-        env["POSTGRES_HOST"] = config.get("host")
-        env["POSTGRES_PORT"] = config.get("port")
-        env["POSTGRES_USER"] = config.get("user")
-        env["POSTGRES_PASSWORD"] = config.get("password")
-        env["POSTGRES_DATABASE"] = cog.__class__.__name__.lower()
-        env["PYTHONIOENCODING"] = "utf-8"
-
-        migration_result = subprocess.run(
+        return subprocess.run(
             ["piccolo", "migrations", "forward", root.name],
-            env=env,
+            env=_get_env(cog, config),
             cwd=root,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         ).stdout.decode()
-        log.debug(migration_result)
 
-        diagnose_result = subprocess.run(
+    return await asyncio.to_thread(run)
+
+
+async def diagnose(cog: Cog, config: dict):
+    """
+    Diagnose any issues with Piccolo
+
+    Args:
+        cog (Cog): Cog instance
+        config (dict): database connection info
+    """
+
+    def run():
+        return subprocess.run(
             ["piccolo", "--diagnose"],
-            env=env,
-            cwd=root,
+            env=_get_env(cog, config),
+            cwd=Path(inspect.getfile(cog.__class__)).parent,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         ).stdout.decode()
-        log.debug(diagnose_result)
-
-        return migration_result
 
     return await asyncio.to_thread(run)
 
@@ -120,10 +123,29 @@ async def register_cog(
         config (dict): database connection info
         tables (list[type[Table]]): list of piccolo table subclasses
         max_size (int): maximum number of database connections, 20 by default
+        make (bool): automatically make new migrations, False by default
 
     Returns:
         Tuple[PostgresEngine, str]: Postgres Engine instance, migration results
     """
-    engine = await create_database_and_tables(cog, config, tables, max_size)
+    await create_database(cog, config)
     result = await run_migrations(cog, config)
+    engine = await create_tables(cog, config, tables, max_size)
     return engine, result
+
+
+def _acquire_db_engine(config: dict) -> PostgresEngine:
+    """This is ran in executor since it blocks if connection info is bad"""
+    return PostgresEngine(config=config)
+
+
+def _get_env(cog: Cog, config: dict):
+    env = os.environ.copy()
+    env["PICCOLO_CONF"] = "db.piccolo_conf"
+    env["POSTGRES_HOST"] = config.get("host")
+    env["POSTGRES_PORT"] = config.get("port")
+    env["POSTGRES_USER"] = config.get("user")
+    env["POSTGRES_PASSWORD"] = config.get("password")
+    env["POSTGRES_DATABASE"] = cog.__class__.__name__.lower()
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
