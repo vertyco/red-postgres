@@ -12,26 +12,32 @@ from piccolo.table import Table, create_db_tables
 log = logging.getLogger("red.red-postgres.engine")
 
 
-async def create_database(cog: Cog, config: dict) -> None:
+async def create_database(cog: Cog, config: dict) -> bool:
     """Create cog's database if it doesnt exist
 
     Args:
         cog (Cog): Cog instance
         config (dict): Postgres connection information
+
+    Returns:
+        bool: whether a new database was created
     """
     engine = await asyncio.to_thread(_acquire_db_engine, config)
     await engine.start_connection_pool()
 
     # Check if the database exists
+    created = False
+    database_name = _root(cog).name.lower()
     databases = await engine._run_in_pool("SELECT datname FROM pg_database;")
-    cog_name = cog.__class__.__name__.lower()
-    if cog_name not in [db["datname"] for db in databases]:
+    if database_name not in [db["datname"] for db in databases]:
         # Create the database
-        log.info(f"First time running {cog_name}! Creating new database!")
-        await engine._run_in_pool(f"CREATE DATABASE {cog_name};")
+        log.info(f"First time running {database_name}! Creating new database!")
+        await engine._run_in_pool(f"CREATE DATABASE {database_name};")
+        created = True
 
     # Close old database connection
     await engine.close_connection_pool()
+    return created
 
 
 async def create_tables(
@@ -48,9 +54,9 @@ async def create_tables(
     Returns:
         PostgresEngine instance
     """
-    # Connect to the new database
-    config["database"] = cog.__class__.__name__.lower()
-    engine = await asyncio.to_thread(_acquire_db_engine, config)
+    temp_config = config.copy()
+    temp_config["database"] = _root(cog).name.lower()
+    engine = await asyncio.to_thread(_acquire_db_engine, temp_config)
     await engine.start_connection_pool(max_size=max_size)
 
     # Update table engines
@@ -62,7 +68,7 @@ async def create_tables(
     return engine
 
 
-async def run_migrations(cog: Cog, config: dict):
+async def run_migrations(cog: Cog, config: dict) -> str:
     """
     Run any existing migrations programatically.
 
@@ -71,17 +77,18 @@ async def run_migrations(cog: Cog, config: dict):
     Args:
         cog (Cog): Cog instance
         config (dict): database connection info
-        make (bool): automatically make new migrations, False by default
 
     Returns:
         str: Results of the migration
     """
 
     def run():
-        root = Path(inspect.getfile(cog.__class__)).parent
+        root = _root(cog)
+        temp_config = config.copy()
+        temp_config["database"] = root.name.lower()
         return subprocess.run(
-            ["piccolo", "migrations", "forward", root.name],
-            env=_get_env(cog, config),
+            ["piccolo", "migrations", "forward", root.name.lower()],
+            env=_get_env(temp_config),
             cwd=root,
             shell=True,
             stdout=subprocess.PIPE,
@@ -91,7 +98,7 @@ async def run_migrations(cog: Cog, config: dict):
     return await asyncio.to_thread(run)
 
 
-async def diagnose(cog: Cog, config: dict):
+async def diagnose(cog: Cog, config: dict) -> str:
     """
     Diagnose any issues with Piccolo
 
@@ -101,10 +108,13 @@ async def diagnose(cog: Cog, config: dict):
     """
 
     def run():
+        root = _root(cog)
+        temp_config = config.copy()
+        temp_config["database"] = root.name.lower()
         return subprocess.run(
             ["piccolo", "--diagnose"],
-            env=_get_env(cog, config),
-            cwd=Path(inspect.getfile(cog.__class__)).parent,
+            env=_get_env(temp_config),
+            cwd=root,
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -115,7 +125,7 @@ async def diagnose(cog: Cog, config: dict):
 
 async def register_cog(
     cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
-) -> tuple[PostgresEngine, str]:
+) -> PostgresEngine:
     """Registers a cog by creating a database for it and initializing any tables it has
 
     Args:
@@ -126,12 +136,15 @@ async def register_cog(
         make (bool): automatically make new migrations, False by default
 
     Returns:
-        Tuple[PostgresEngine, str]: Postgres Engine instance, migration results
+        PostgresEngine
     """
+    # Create databse under root folder name
     await create_database(cog, config)
+    # Run any migrations
     result = await run_migrations(cog, config)
-    engine = await create_tables(cog, config, tables, max_size)
-    return engine, result
+    log.info(result)
+    # Create any tables and fetch postgres engine
+    return await create_tables(cog, config, tables, max_size)
 
 
 def _acquire_db_engine(config: dict) -> PostgresEngine:
@@ -139,13 +152,19 @@ def _acquire_db_engine(config: dict) -> PostgresEngine:
     return PostgresEngine(config=config)
 
 
-def _get_env(cog: Cog, config: dict):
+def _get_env(config: dict) -> dict:
+    """Create mock environment for subprocess"""
     env = os.environ.copy()
     env["PICCOLO_CONF"] = "db.piccolo_conf"
     env["POSTGRES_HOST"] = config.get("host")
     env["POSTGRES_PORT"] = config.get("port")
     env["POSTGRES_USER"] = config.get("user")
     env["POSTGRES_PASSWORD"] = config.get("password")
-    env["POSTGRES_DATABASE"] = cog.__class__.__name__.lower()
+    env["POSTGRES_DATABASE"] = config.get("database")
     env["PYTHONIOENCODING"] = "utf-8"
     return env
+
+
+def _root(cog: Cog) -> Path:
+    """Get root directory of cog, used for path and database name"""
+    return Path(inspect.getfile(cog.__class__)).parent

@@ -50,7 +50,7 @@ class PiccoloTemplate(commands.Cog):
     async def setup(self):
         await self.bot.wait_until_red_ready()
         config = await self.bot.get_shared_api_tokens("piccolo")
-        self.db, migration_result_message = await register_cog(self, config, [MyTable])
+        self.db = await register_cog(self, config, [MyTable])
 
     async def cog_unload(self):
         if self.db:
@@ -69,6 +69,8 @@ The shared api token config for piccolo should be the following:
 }
 ```
 
+> Note: database name in your config should normally be the default "postgres", this library will automatically handle connecting your cogs to their own database
+
 The register method connects to the database specified in config, creates the a new database with the name of the registering cog, registers any tables, runs any migrations, sets the new engine object to all tables, and returns the raw engine object.
 
 - The name of the database will be the the name of the cog's folder, not the name of the main cog.py file
@@ -83,7 +85,7 @@ objects = await MyTable.objects().where(MyTable.text == "Hello World")
 
 The engine associated with your tables after registering the cog is connected to the database named the same as the cog that registered them, thus using this integration with multiple cogs will not interfere, as each cog will create its own database.
 
-- _If your cog's name is `MyCog` then the database will be named `my_cog`_
+- _If your cog's folder name is `MyCog` then the database will be named `my_cog`_
 
 # Piccolo Configuration Files
 
