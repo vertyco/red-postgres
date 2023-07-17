@@ -133,7 +133,6 @@ async def register_cog(
         config (dict): database connection info
         tables (list[type[Table]]): list of piccolo table subclasses
         max_size (int): maximum number of database connections, 20 by default
-        make (bool): automatically make new migrations, False by default
 
     Returns:
         PostgresEngine
