@@ -8,4 +8,4 @@ from .engine import (
 
 __author__ = "Vertyco"
 __all__ = ["create_database", "create_tables", "run_migrations", "diagnose", "register_cog"]
-__version__ = "0.1.3"
+__version__ = "0.1.5"

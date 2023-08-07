@@ -1,6 +1,8 @@
 import asyncio
+import functools
 import inspect
 import logging
+import multiprocessing as mp
 import os
 import subprocess
 from pathlib import Path
@@ -9,11 +11,14 @@ from discord.ext.commands import Cog
 from piccolo.engine.postgres import PostgresEngine
 from piccolo.table import Table, create_db_tables
 
+from .errors import ConnectionTimeoutError
+
 log = logging.getLogger("red.red-postgres.engine")
 
 
 async def create_database(cog: Cog, config: dict) -> bool:
-    """Create cog's database if it doesnt exist
+    """
+    Create cog's database if it doesnt exist.
 
     Args:
         cog (Cog): Cog instance
@@ -22,7 +27,9 @@ async def create_database(cog: Cog, config: dict) -> bool:
     Returns:
         bool: whether a new database was created
     """
-    engine = await asyncio.to_thread(_acquire_db_engine, config)
+    log.debug("Acquiring engine for db creation")
+    engine = await _acquire_db_engine(config)
+    log.debug("Starting connection pool")
     await engine.start_connection_pool()
 
     # Check if the database exists
@@ -31,7 +38,7 @@ async def create_database(cog: Cog, config: dict) -> bool:
     databases = await engine._run_in_pool("SELECT datname FROM pg_database;")
     if database_name not in [db["datname"] for db in databases]:
         # Create the database
-        log.info(f"First time running {database_name}! Creating new database!")
+        log.info(f"New cog detected, Creating database for {database_name}")
         await engine._run_in_pool(f"CREATE DATABASE {database_name};")
         created = True
 
@@ -40,10 +47,11 @@ async def create_database(cog: Cog, config: dict) -> bool:
     return created
 
 
-async def create_tables(
+async def fetch_cog_engine(
     cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
 ) -> PostgresEngine:
-    """Connect to postgres, create database/tables and return engine
+    """
+    Connect to postgres, start pool, and return engine.
 
     Args:
         cog (Cog): Cog instance
@@ -54,17 +62,46 @@ async def create_tables(
     Returns:
         PostgresEngine instance
     """
+    log.debug("Fetching engine")
     temp_config = config.copy()
     temp_config["database"] = _root(cog).name.lower()
-    engine = await asyncio.to_thread(_acquire_db_engine, temp_config)
+    engine = await _acquire_db_engine(temp_config)
+    log.debug("Starting connection pool")
     await engine.start_connection_pool(max_size=max_size)
-
+    log.debug("Assigning engines to tables")
     # Update table engines
     for table_class in tables:
         table_class._meta.db = engine
+    return engine
 
-    # Create any tables that don't already exist
-    await create_db_tables(*tables, if_not_exists=True)
+
+async def create_tables(
+    cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
+) -> PostgresEngine:
+    """
+    Connect to postgres, create database/tables, start pool, and return engine.
+
+    Args:
+        cog (Cog): Cog instance
+        config (dict): database connection info
+        tables (list[type[Table]]): list of piccolo table subclasses
+        max_size (int): maximum number of database connections, 20 by default
+
+    Returns:
+        PostgresEngine instance
+    """
+    engine = await fetch_cog_engine(cog, config, tables, max_size)
+
+    log.debug("Creating tables if they don't exist")
+    try:
+        task = create_db_tables(*tables, if_not_exists=True)
+        log.debug("Waiting for tables to create")
+        await asyncio.wait_for(task, timeout=10)
+    except asyncio.TimeoutError:
+        log.info("Table creation took too long")
+    except Exception as e:
+        log.info("Failed to run create tables", exc_info=e)
+
     return engine
 
 
@@ -137,18 +174,44 @@ async def register_cog(
     Returns:
         PostgresEngine
     """
+    log.debug(f"Registering {cog.qualified_name}")
     # Create databse under root folder name
-    await create_database(cog, config)
-    # Run any migrations
+    created = await create_database(cog, config)
+    if created:
+        # Create any tables and fetch postgres engine
+        engine = await create_tables(cog, config, tables, max_size)
+    else:
+        # Just fetch the engine
+        engine = await fetch_cog_engine(cog, config, tables, max_size)
+
+    log.debug("Running migrations, if any")
     result = await run_migrations(cog, config)
-    log.info(result)
-    # Create any tables and fetch postgres engine
-    return await create_tables(cog, config, tables, max_size)
+    result = result.replace("👍", "✓")
+    log.info(f"Migration result\n{result}")
+
+    return engine
 
 
-def _acquire_db_engine(config: dict) -> PostgresEngine:
+def _acquire(config: dict) -> PostgresEngine:
+    PostgresEngine(config=config)
+
+
+async def _acquire_db_engine(config: dict) -> PostgresEngine:
     """This is ran in executor since it blocks if connection info is bad"""
-    return PostgresEngine(config=config)
+    pool = mp.Pool()
+    try:
+        process = pool.apply_async(_acquire, args=(config,))
+        task = functools.partial(process.get, timeout=10)
+        loop = asyncio.get_running_loop()
+        new_task = loop.run_in_executor(None, task)
+        await asyncio.wait_for(new_task, timeout=10)
+    except asyncio.TimeoutError:
+        raise ConnectionTimeoutError("Database took longer than 10 seconds to connect!")
+    finally:
+        pool.close()
+
+    engine = await asyncio.to_thread(PostgresEngine, config)
+    return engine
 
 
 def _get_env(config: dict) -> dict:

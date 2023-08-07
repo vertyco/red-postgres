@@ -2,6 +2,9 @@
 
 Piccolo Postgres integration for Red-DiscordBot, although it could be used with any dpy bot as an easy wrapper for making postgres with cogs more modular.
 
+![Postgres 15](https://img.shields.io/badge/postgres%2015-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
+![Red-DiscordBot](https://img.shields.io/badge/Red%20DiscordBot-V3.5-red?style=for-the-badge)
+
 ![Py](https://img.shields.io/badge/python-v3.11-yellow?style=for-the-badge)
 ![black](https://img.shields.io/badge/style-black-000000?style=for-the-badge&?link=https://github.com/psf/black)
 ![license](https://img.shields.io/github/license/Vertyco/red-postgres?style=for-the-badge)
