@@ -1,8 +1,6 @@
 import asyncio
-import functools
 import inspect
 import logging
-import multiprocessing as mp
 import os
 import subprocess
 from pathlib import Path
@@ -62,9 +60,9 @@ async def fetch_cog_engine(
     Returns:
         PostgresEngine instance
     """
-    log.debug("Fetching engine")
     temp_config = config.copy()
     temp_config["database"] = _root(cog).name.lower()
+    log.debug("Fetching engine")
     engine = await _acquire_db_engine(temp_config)
     log.debug("Starting connection pool")
     await engine.start_connection_pool(max_size=max_size)
@@ -192,26 +190,18 @@ async def register_cog(
     return engine
 
 
-def _acquire(config: dict) -> PostgresEngine:
-    PostgresEngine(config=config)
-
-
 async def _acquire_db_engine(config: dict) -> PostgresEngine:
     """This is ran in executor since it blocks if connection info is bad"""
-    pool = mp.Pool()
+
+    def _acquire(config: dict) -> PostgresEngine:
+        return PostgresEngine(config=config)
+
     try:
-        process = pool.apply_async(_acquire, args=(config,))
-        task = functools.partial(process.get, timeout=10)
-        loop = asyncio.get_running_loop()
-        new_task = loop.run_in_executor(None, task)
-        await asyncio.wait_for(new_task, timeout=10)
+        async with asyncio.timeout(10):
+            engine = await asyncio.to_thread(_acquire, config)
+            return engine
     except asyncio.TimeoutError:
         raise ConnectionTimeoutError("Database took longer than 10 seconds to connect!")
-    finally:
-        pool.close()
-
-    engine = await asyncio.to_thread(PostgresEngine, config)
-    return engine
 
 
 def _get_env(config: dict) -> dict:

@@ -1,2 +1,2 @@
-discord.py==2.2.3
-piccolo[postgres]==0.113.0
+discord.py~=2.3.2
+piccolo[postgres]~=0.119.0
