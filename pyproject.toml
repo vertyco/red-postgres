@@ -1,8 +1,9 @@
 [build-system]
 requires = [
-  "setuptools>=61.0",
-  "discord.py>=2.2.3",
-  "piccolo[postgres]>=0.113.0",
+  "setuptools~=68.0",
+  "wheel~=0.41.1",
+  "discord.py~=2.3.2",
+  "piccolo[postgres]~=0.119.0",
 ]
 build-backend = "setuptools.build_meta"
 

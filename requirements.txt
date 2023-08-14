@@ -1,2 +1,5 @@
+build~=0.10.0
 discord.py~=2.3.2
 piccolo[postgres]~=0.119.0
+twine~=4.0.2
+wheel~=0.41.1
