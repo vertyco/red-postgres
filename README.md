@@ -13,6 +13,12 @@ Piccolo Postgres integration for Red-DiscordBot, although it could be used with 
 ![Stars](https://img.shields.io/github/stars/Vertyco/red-postgres?style=for-the-badge&color=yellow)
 ![Lines of code](https://img.shields.io/tokei/lines/github/Vertyco/red-postgres?color=ff69b4&label=Lines&style=for-the-badge)
 
+# Install
+
+```python
+pip install red-postgres
+```
+
 # File structure for using with cogs
 
 ```

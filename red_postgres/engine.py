@@ -92,9 +92,9 @@ async def create_tables(
 
     log.debug("Creating tables if they don't exist")
     try:
-        task = create_db_tables(*tables, if_not_exists=True)
         log.debug("Waiting for tables to create")
-        await asyncio.wait_for(task, timeout=10)
+        async with asyncio.timeout(10):
+            await create_db_tables(*tables, if_not_exists=True)
     except asyncio.TimeoutError:
         log.info("Table creation took too long")
     except Exception as e:
