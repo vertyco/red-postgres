@@ -182,10 +182,17 @@ async def register_cog(
         # Just fetch the engine
         engine = await fetch_cog_engine(cog, config, tables, max_size)
 
-    log.debug("Running migrations, if any")
-    result = await run_migrations(cog, config)
-    result = result.replace("👍", "✓")
-    log.info(f"Migration result\n{result}")
+    if _is_unc_path(_root(cog)):
+        txt = (
+            f"The {cog.qualified_name} cog is located on a UNC path, which is not supported."
+            " Migrations cannot until the cog files are relocated to a local path."
+        )
+        log.warning(txt)
+    else:
+        log.debug("Running migrations, if any")
+        result = await run_migrations(cog, config)
+        result = result.replace("👍", "✓")
+        log.info(f"Migration result...\n{result}")
 
     return engine
 
@@ -220,3 +227,7 @@ def _get_env(config: dict) -> dict:
 def _root(cog: Cog) -> Path:
     """Get root directory of cog, used for path and database name"""
     return Path(inspect.getfile(cog.__class__)).parent
+
+
+def _is_unc_path(path: Path) -> bool:
+    return path.is_absolute() and str(path).startswith("\\\\")
