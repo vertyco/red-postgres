@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "red-postgres"
-version = "0.1.12"
+version = "0.2.0"
 authors = [{ name = "Vertyco" }]
 description = "Piccolo Postgres integration for Red"
 readme = "README.md"

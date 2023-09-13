@@ -9,7 +9,7 @@ from discord.ext.commands import Cog
 from piccolo.engine.postgres import PostgresEngine
 from piccolo.table import Table, sort_table_classes
 
-from .errors import ConnectionTimeoutError
+from .errors import ConnectionTimeoutError, UNCPathError
 
 log = logging.getLogger("red.red-postgres.engine")
 
@@ -120,6 +120,9 @@ async def run_migrations(cog: Cog, config: dict, trace: bool = False) -> str:
     Returns:
         str: _description_
     """
+    if _is_unc_path(_root(cog)):
+        error = f"Migrations cannot run for the {cog.qualified_name} cog because it is located on a UNC path!"
+        raise UNCPathError(error)
 
     def run():
         root = _root(cog)
@@ -187,12 +190,6 @@ async def register_cog(
     log.debug(f"Registering {cog.qualified_name}")
     # Create databse under root folder name
     created = await create_database(cog, config)
-    if created:
-        # Create any tables and fetch postgres engine
-        engine = await create_tables(cog, config, tables, max_size)
-    else:
-        # Just fetch the engine
-        engine = await fetch_cog_engine(cog, config, tables, max_size)
 
     if _is_unc_path(_root(cog)):
         txt = (
@@ -205,6 +202,13 @@ async def register_cog(
         result = await run_migrations(cog, config, trace)
         result = result.replace("👍", "✓")
         log.info(f"Migration result...\n{result}")
+
+    if created:
+        # Create any tables and fetch postgres engine in case there was no initial migration
+        engine = await create_tables(cog, config, tables, max_size)
+    else:
+        # Just fetch the engine
+        engine = await fetch_cog_engine(cog, config, tables, max_size)
 
     return engine
 
