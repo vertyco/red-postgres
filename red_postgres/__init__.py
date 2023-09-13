@@ -16,4 +16,4 @@ __all__ = [
     "register_cog",
     "ConnectionTimeoutError",
 ]
-__version__ = "0.1.9"
+__version__ = "0.1.12"

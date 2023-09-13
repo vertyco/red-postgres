@@ -7,7 +7,7 @@ from pathlib import Path
 
 from discord.ext.commands import Cog
 from piccolo.engine.postgres import PostgresEngine
-from piccolo.table import Table, create_db_tables
+from piccolo.table import Table, sort_table_classes
 
 from .errors import ConnectionTimeoutError
 
@@ -92,9 +92,12 @@ async def create_tables(
 
     log.debug("Creating tables if they don't exist")
     try:
-        log.debug("Waiting for tables to create")
-        async with asyncio.timeout(10):
-            await create_db_tables(*tables, if_not_exists=True)
+        async with asyncio.timeout(15):
+            log.debug("Sorting table classes")
+            sorted_tables = await asyncio.to_thread(sort_table_classes, tables)
+            for table in sorted_tables:
+                log.debug(f"Creating table {table._meta.tablename}")
+                await table.create_table(if_not_exists=True)
     except asyncio.TimeoutError:
         log.info("Table creation took too long")
     except Exception as e:
@@ -103,7 +106,7 @@ async def create_tables(
     return engine
 
 
-async def run_migrations(cog: Cog, config: dict) -> str:
+async def run_migrations(cog: Cog, config: dict, trace: bool = False) -> str:
     """
     Run any existing migrations programatically.
 
@@ -112,17 +115,21 @@ async def run_migrations(cog: Cog, config: dict) -> str:
     Args:
         cog (Cog): Cog instance
         config (dict): database connection info
+        trace (bool, optional): include --trace in the command for debugging
 
     Returns:
-        str: Results of the migration
+        str: _description_
     """
 
     def run():
         root = _root(cog)
         temp_config = config.copy()
         temp_config["database"] = root.name.lower()
+        commands = ["piccolo", "migrations", "forward", root.name.lower()]
+        if trace:
+            commands.append("--trace")
         return subprocess.run(
-            ["piccolo", "migrations", "forward", root.name.lower()],
+            commands,
             env=_get_env(temp_config),
             cwd=root,
             shell=True,
@@ -159,7 +166,11 @@ async def diagnose(cog: Cog, config: dict) -> str:
 
 
 async def register_cog(
-    cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
+    cog: Cog,
+    config: dict,
+    tables: list[type[Table]],
+    max_size: int = 20,
+    trace: bool = False,
 ) -> PostgresEngine:
     """Registers a cog by creating a database for it and initializing any tables it has
 
@@ -168,6 +179,7 @@ async def register_cog(
         config (dict): database connection info
         tables (list[type[Table]]): list of piccolo table subclasses
         max_size (int): maximum number of database connections, 20 by default
+        trace (bool, optional): include --trace in the command for debugging
 
     Returns:
         PostgresEngine
@@ -190,7 +202,7 @@ async def register_cog(
         log.warning(txt)
     else:
         log.debug("Running migrations, if any")
-        result = await run_migrations(cog, config)
+        result = await run_migrations(cog, config, trace)
         result = result.replace("👍", "✓")
         log.info(f"Migration result...\n{result}")
 
