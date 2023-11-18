@@ -118,7 +118,7 @@ async def run_migrations(cog: Path, config: dict, trace: bool = False) -> str:
         str: _description_
     """
     _check(cog)
-    if _is_unc_path(str(cog)):
+    if _is_unc_path(cog):
         error = f"Migrations cannot run for the {cog.name} cog because it is located on a UNC path!"
         raise UNCPathError(error)
 
@@ -189,7 +189,7 @@ async def register_cog(
     # Create databse under root folder name
     created = await create_database(cog, config)
 
-    if _is_unc_path(str(cog)):
+    if _is_unc_path(cog):
         txt = (
             f"The {cog.name} cog is located on a UNC path, which is not supported."
             " Migrations cannot until the cog files are relocated to a local path."
