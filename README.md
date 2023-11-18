@@ -38,6 +38,7 @@ cog-folder/
 
 ```python
 import asyncio
+from pathlib import Path
 
 from piccolo.engine.postgres import PostgresEngine
 from redbot.core import commands
@@ -59,7 +60,11 @@ class PiccoloTemplate(commands.Cog):
     async def setup(self):
         await self.bot.wait_until_red_ready()
         config = await self.bot.get_shared_api_tokens("piccolo")
-        self.db = await register_cog(self, config, [MyTable])
+
+        # Pass the root directory of the cog
+        cog_root = Path(__file__).parent
+
+        self.db = await register_cog(cog_root, config, [MyTable])
 
     async def cog_unload(self):
         if self.db:

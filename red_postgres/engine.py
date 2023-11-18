@@ -1,30 +1,29 @@
 import asyncio
-import inspect
 import logging
 import os
 import subprocess
 from pathlib import Path
 
-from discord.ext.commands import Cog
 from piccolo.engine.postgres import PostgresEngine
 from piccolo.table import Table, sort_table_classes
 
-from .errors import ConnectionTimeoutError, UNCPathError
+from .errors import ConnectionTimeoutError, DirectoryError, UNCPathError
 
 log = logging.getLogger("red.red-postgres.engine")
 
 
-async def create_database(cog: Cog, config: dict) -> bool:
+async def create_database(cog: Path, config: dict) -> bool:
     """
     Create cog's database if it doesnt exist.
 
     Args:
-        cog (Cog): Cog instance
+        cog (Path): Cog folder path
         config (dict): Postgres connection information
 
     Returns:
         bool: whether a new database was created
     """
+    _check(cog)
     log.debug("Acquiring engine for db creation")
     engine = await _acquire_db_engine(config)
     log.debug("Starting connection pool")
@@ -32,7 +31,7 @@ async def create_database(cog: Cog, config: dict) -> bool:
 
     # Check if the database exists
     created = False
-    database_name = _root(cog).name.lower()
+    database_name = cog.name.lower()
     databases = await engine._run_in_pool("SELECT datname FROM pg_database;")
     if database_name not in [db["datname"] for db in databases]:
         # Create the database
@@ -45,14 +44,12 @@ async def create_database(cog: Cog, config: dict) -> bool:
     return created
 
 
-async def fetch_cog_engine(
-    cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
-) -> PostgresEngine:
+async def fetch_cog_engine(cog: Path, config: dict, tables: list[type[Table]], max_size: int = 20) -> PostgresEngine:
     """
     Connect to postgres, start pool, and return engine.
 
     Args:
-        cog (Cog): Cog instance
+        cog (Path): Cog folder path
         config (dict): database connection info
         tables (list[type[Table]]): list of piccolo table subclasses
         max_size (int): maximum number of database connections, 20 by default
@@ -60,8 +57,9 @@ async def fetch_cog_engine(
     Returns:
         PostgresEngine instance
     """
+    _check(cog)
     temp_config = config.copy()
-    temp_config["database"] = _root(cog).name.lower()
+    temp_config["database"] = cog.name.lower()
     log.debug("Fetching engine")
     engine = await _acquire_db_engine(temp_config)
     log.debug("Starting connection pool")
@@ -73,14 +71,12 @@ async def fetch_cog_engine(
     return engine
 
 
-async def create_tables(
-    cog: Cog, config: dict, tables: list[type[Table]], max_size: int = 20
-) -> PostgresEngine:
+async def create_tables(cog: Path, config: dict, tables: list[type[Table]], max_size: int = 20) -> PostgresEngine:
     """
     Connect to postgres, create database/tables, start pool, and return engine.
 
     Args:
-        cog (Cog): Cog instance
+        cog (Path): Cog folder path
         config (dict): database connection info
         tables (list[type[Table]]): list of piccolo table subclasses
         max_size (int): maximum number of database connections, 20 by default
@@ -88,6 +84,7 @@ async def create_tables(
     Returns:
         PostgresEngine instance
     """
+    _check(cog)
     engine = await fetch_cog_engine(cog, config, tables, max_size)
 
     log.debug("Creating tables if they don't exist")
@@ -106,35 +103,35 @@ async def create_tables(
     return engine
 
 
-async def run_migrations(cog: Cog, config: dict, trace: bool = False) -> str:
+async def run_migrations(cog: Path, config: dict, trace: bool = False) -> str:
     """
     Run any existing migrations programatically.
 
     There might be a better way to do this that subprocess, but haven't tested yet.
 
     Args:
-        cog (Cog): Cog instance
+        cog (Path): Cog folder path
         config (dict): database connection info
         trace (bool, optional): include --trace in the command for debugging
 
     Returns:
         str: _description_
     """
-    if _is_unc_path(_root(cog)):
-        error = f"Migrations cannot run for the {cog.qualified_name} cog because it is located on a UNC path!"
+    _check(cog)
+    if _is_unc_path(str(cog)):
+        error = f"Migrations cannot run for the {cog.name} cog because it is located on a UNC path!"
         raise UNCPathError(error)
 
     def run():
-        root = _root(cog)
         temp_config = config.copy()
-        temp_config["database"] = root.name.lower()
-        commands = ["piccolo", "migrations", "forward", root.name.lower()]
+        temp_config["database"] = cog.name.lower()
+        commands = ["piccolo", "migrations", "forward", cog.name.lower()]
         if trace:
             commands.append("--trace")
         return subprocess.run(
             commands,
             env=_get_env(temp_config),
-            cwd=root,
+            cwd=str(cog),
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -143,23 +140,23 @@ async def run_migrations(cog: Cog, config: dict, trace: bool = False) -> str:
     return await asyncio.to_thread(run)
 
 
-async def diagnose(cog: Cog, config: dict) -> str:
+async def diagnose(cog: Path, config: dict) -> str:
     """
     Diagnose any issues with Piccolo
 
     Args:
-        cog (Cog): Cog instance
+        cog (Path): Cog folder path
         config (dict): database connection info
     """
+    _check(cog)
 
     def run():
-        root = _root(cog)
         temp_config = config.copy()
-        temp_config["database"] = root.name.lower()
+        temp_config["database"] = cog.name.lower()
         return subprocess.run(
             ["piccolo", "--diagnose"],
             env=_get_env(temp_config),
-            cwd=root,
+            cwd=str(cog),
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -169,7 +166,7 @@ async def diagnose(cog: Cog, config: dict) -> str:
 
 
 async def register_cog(
-    cog: Cog,
+    cog: Path,
     config: dict,
     tables: list[type[Table]],
     max_size: int = 20,
@@ -178,7 +175,7 @@ async def register_cog(
     """Registers a cog by creating a database for it and initializing any tables it has
 
     Args:
-        cog (Cog): Cog instance
+        cog (Path): Cog folder path
         config (dict): database connection info
         tables (list[type[Table]]): list of piccolo table subclasses
         max_size (int): maximum number of database connections, 20 by default
@@ -187,13 +184,14 @@ async def register_cog(
     Returns:
         PostgresEngine
     """
-    log.debug(f"Registering {cog.qualified_name}")
+    log.info(f"Registering {cog.name}")
+    _check(cog)
     # Create databse under root folder name
     created = await create_database(cog, config)
 
-    if _is_unc_path(_root(cog)):
+    if _is_unc_path(str(cog)):
         txt = (
-            f"The {cog.qualified_name} cog is located on a UNC path, which is not supported."
+            f"The {cog.name} cog is located on a UNC path, which is not supported."
             " Migrations cannot until the cog files are relocated to a local path."
         )
         log.warning(txt)
@@ -240,10 +238,11 @@ def _get_env(config: dict) -> dict:
     return env
 
 
-def _root(cog: Cog) -> Path:
-    """Get root directory of cog, used for path and database name"""
-    return Path(inspect.getfile(cog.__class__)).parent
+def _check(cog: Path) -> Path:
+    """Verify that the cog path passed is a directory and not a file"""
+    if not cog.is_dir():
+        raise DirectoryError("Cog path is not a directory!")
 
 
 def _is_unc_path(path: Path) -> bool:
-    return path.is_absolute() and str(path).startswith("\\\\")
+    return path.is_absolute() and str(path).startswith(r"\\\\")
