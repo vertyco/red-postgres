@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from piccolo.engine.postgres import PostgresEngine
@@ -10,6 +11,7 @@ from piccolo.table import Table, sort_table_classes
 from .errors import ConnectionTimeoutError, DirectoryError, UNCPathError
 
 log = logging.getLogger("red.red-postgres.engine")
+piccolo_path = Path(sys.executable).parent / "piccolo"
 
 
 async def create_database(cog: Path, config: dict) -> bool:
@@ -24,9 +26,9 @@ async def create_database(cog: Path, config: dict) -> bool:
         bool: whether a new database was created
     """
     _check(cog)
-    log.debug("Acquiring engine for db creation")
+    log.info("Acquiring engine for db creation")
     engine = await _acquire_db_engine(config)
-    log.debug("Starting connection pool")
+    log.info("Starting connection pool")
     await engine.start_connection_pool()
 
     # Check if the database exists
@@ -35,7 +37,7 @@ async def create_database(cog: Path, config: dict) -> bool:
     databases = await engine._run_in_pool("SELECT datname FROM pg_database;")
     if database_name not in [db["datname"] for db in databases]:
         # Create the database
-        log.info(f"New cog detected, Creating database for {database_name}")
+        log.warning(f"New cog detected, Creating database for {database_name}")
         await engine._run_in_pool(f"CREATE DATABASE {database_name};")
         created = True
 
@@ -60,11 +62,11 @@ async def fetch_cog_engine(cog: Path, config: dict, tables: list[type[Table]], m
     _check(cog)
     temp_config = config.copy()
     temp_config["database"] = cog.name.lower()
-    log.debug("Fetching engine")
+    log.info("Fetching engine")
     engine = await _acquire_db_engine(temp_config)
-    log.debug("Starting connection pool")
+    log.info("Starting connection pool")
     await engine.start_connection_pool(max_size=max_size)
-    log.debug("Assigning engines to tables")
+    log.info("Assigning engines to tables")
     # Update table engines
     for table_class in tables:
         table_class._meta.db = engine
@@ -87,18 +89,18 @@ async def create_tables(cog: Path, config: dict, tables: list[type[Table]], max_
     _check(cog)
     engine = await fetch_cog_engine(cog, config, tables, max_size)
 
-    log.debug("Creating tables if they don't exist")
+    log.info("Creating tables if they don't exist")
     try:
         async with asyncio.timeout(15):
-            log.debug("Sorting table classes")
+            log.info("Sorting table classes")
             sorted_tables = await asyncio.to_thread(sort_table_classes, tables)
             for table in sorted_tables:
-                log.debug(f"Creating table {table._meta.tablename}")
+                log.info(f"Creating table {table._meta.tablename}")
                 await table.create_table(if_not_exists=True)
     except asyncio.TimeoutError:
-        log.info("Table creation took too long")
+        log.warning("Table creation took too long")
     except Exception as e:
-        log.info("Failed to run create tables", exc_info=e)
+        log.warning("Failed to run create tables", exc_info=e)
 
     return engine
 
@@ -125,14 +127,14 @@ async def run_migrations(cog: Path, config: dict, trace: bool = False) -> str:
     def run():
         temp_config = config.copy()
         temp_config["database"] = cog.name.lower()
-        commands = ["piccolo", "migrations", "forward", cog.name.lower()]
+        commands = [str(piccolo_path), "migrations", "forwards", cog.name.lower()]
         if trace:
             commands.append("--trace")
         return subprocess.run(
             commands,
             env=_get_env(temp_config),
             cwd=str(cog),
-            shell=True,
+            shell=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         ).stdout.decode()
@@ -153,14 +155,23 @@ async def diagnose(cog: Path, config: dict) -> str:
     def run():
         temp_config = config.copy()
         temp_config["database"] = cog.name.lower()
-        return subprocess.run(
-            ["piccolo", "--diagnose"],
+        diagnoses = subprocess.run(
+            [str(piccolo_path), "--diagnose"],
             env=_get_env(temp_config),
             cwd=str(cog),
-            shell=True,
+            shell=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         ).stdout.decode()
+        check = subprocess.run(
+            [str(piccolo_path), "migrations", "check"],
+            env=_get_env(temp_config),
+            cwd=str(cog),
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        ).stdout.decode()
+        return f"DIAGNOSES\n{diagnoses}\nCHECK\n{check}"
 
     return await asyncio.to_thread(run)
 
@@ -184,7 +195,7 @@ async def register_cog(
     Returns:
         PostgresEngine
     """
-    log.info(f"Registering {cog.name}")
+    log.warning(f"Registering {cog.name}")
     _check(cog)
     # Create databse under root folder name
     created = await create_database(cog, config)
@@ -196,10 +207,10 @@ async def register_cog(
         )
         log.warning(txt)
     else:
-        log.debug("Running migrations, if any")
+        log.info("Running migrations, if any")
         result = await run_migrations(cog, config, trace)
         result = result.replace("👍", "✓")
-        log.info(f"Migration result...\n{result}")
+        log.warning(f"Migration result...\n{result}")
 
     if created:
         # Create any tables and fetch postgres engine in case there was no initial migration
@@ -234,7 +245,8 @@ def _get_env(config: dict) -> dict:
     env["POSTGRES_USER"] = config.get("user")
     env["POSTGRES_PASSWORD"] = config.get("password")
     env["POSTGRES_DATABASE"] = config.get("database")
-    env["PYTHONIOENCODING"] = "utf-8"
+    if _is_windows():
+        env["PYTHONIOENCODING"] = "utf-8"
     return env
 
 
@@ -246,3 +258,7 @@ def _check(cog: Path) -> Path:
 
 def _is_unc_path(path: Path) -> bool:
     return path.is_absolute() and str(path).startswith(r"\\\\")
+
+
+def _is_windows() -> bool:
+    return os.name == "nt"
