@@ -203,7 +203,7 @@ async def register_cog(
     if _is_unc_path(cog):
         txt = (
             f"The {cog.name} cog is located on a UNC path, which is not supported."
-            " Migrations cannot until the cog files are relocated to a local path."
+            " Migrations cannot run until the cog files are relocated to a local path."
         )
         log.warning(txt)
     else:
