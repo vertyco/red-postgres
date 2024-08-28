@@ -30,7 +30,7 @@ cog-folder/
     ├── cog.py
 ```
 
-![SCHEMA](.github/ASSETS/schema.png)
+![SCHEMA](https://raw.githubusercontent.com/vertyco/red-postgres/main/.github/ASSETS/schema.png)
 
 # Cog Usage
 
