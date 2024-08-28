@@ -49,5 +49,6 @@ setup(
     project_urls={
         "Homepage": "https://github.com/vertyco/red-postgres",
         "Bug Tracker": "https://github.com/vertyco/red-postgres/issues",
+        "Changelog": "https://github.com/vertyco/red-postgres/blob/main/CHANGELOG.md",
     },
 )

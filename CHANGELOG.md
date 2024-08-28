@@ -14,3 +14,7 @@
 - Added `create_migration` method
 - Added `ensure_database_exists` as accessible method
 - Added `acquire_db_engine` as accessible method
+
+## Changed
+
+- Cleaned up the `/examples/template_cog` directory showing a more accurate representation of how to use the library.
