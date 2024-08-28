@@ -145,17 +145,17 @@ for `table_classes` add in the list of tables you're using
 
 Handing migrations is up to you, but one way to do it is to make migrations locally like so:
 
-First make an `.env` file.
+First make an `.env` file in the root of your cog's folder.
 
 ```env
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-POSTGRES_USER=user
-POSTGRES_PASSWORD=password123!
-POSTGRES_DATABASE=templatecog
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DATABASE=postgres
 ```
 
-Then create a file in your cog folder.
+Then create a `build.py` file in your cog folder.
 
 ```python
 import asyncio
