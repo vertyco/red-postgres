@@ -1,21 +1,25 @@
 from .engine import (
-    create_database,
-    create_tables,
-    diagnose,
+    acquire_db_engine,
+    create_migrations,
+    diagnose_issues,
+    ensure_database_exists,
     register_cog,
+    reverse_migration,
     run_migrations,
 )
 from .errors import ConnectionTimeoutError, DirectoryError, UNCPathError
+from .version import __version__
 
-__author__ = "Vertyco"
 __all__ = [
-    "create_database",
-    "create_tables",
-    "run_migrations",
-    "diagnose",
-    "register_cog",
     "ConnectionTimeoutError",
-    "UNCPathError",
     "DirectoryError",
+    "UNCPathError",
+    "acquire_db_engine",
+    "create_migrations",
+    "diagnose_issues",
+    "ensure_database_exists",
+    "register_cog",
+    "reverse_migration",
+    "run_migrations",
+    "__version__",
 ]
-__version__ = "0.3.2"

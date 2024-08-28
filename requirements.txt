@@ -1,4 +1,1 @@
-build~=0.10.0
-piccolo[postgres]~=0.119.0
-twine~=4.0.2
-wheel~=0.41.1
+piccolo[postgres]

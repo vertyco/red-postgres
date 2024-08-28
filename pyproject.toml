@@ -1,29 +1,3 @@
-[build-system]
-requires = [
-  "setuptools~=68.0",
-  "wheel~=0.41.1",
-  "discord.py~=2.3.2",
-  "piccolo[postgres]~=0.119.0",
-]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "red-postgres"
-version = "0.3.2"
-authors = [{ name = "Vertyco" }]
-description = "Piccolo Postgres integration for Red"
-readme = "README.md"
-requires-python = ">=3.11"
-classifiers = [
-  "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
-  "Operating System :: OS Independent",
-]
-
-[project.urls]
-"Homepage" = "https://github.com/vertyco/red-postgres"
-"Bug Tracker" = "https://github.com/vertyco/red-postgres/issues"
-
 [tool.ruff]
 # Enable Pyflakes `E` and `F` codes by default.
 select = ["E", "F"]

@@ -2,16 +2,14 @@
 
 Piccolo Postgres integration for Red-DiscordBot, although it could be used with any dpy bot as an easy wrapper for making postgres with cogs more modular.
 
-![Postgres 15](https://img.shields.io/badge/postgres%2015-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
-![Red-DiscordBot](https://img.shields.io/badge/Red%20DiscordBot-V3.5-red?style=for-the-badge)
+[![PyPi](https://img.shields.io/pypi/v/red-postgres)](https://pypi.org/project/red-postgres/)
+[![Pythons](https://img.shields.io/pypi/pyversions/red-postgres)](https://pypi.org/project/red-postgres/)
 
-![Py](https://img.shields.io/badge/python-v3.11-yellow?style=for-the-badge)
-![black](https://img.shields.io/badge/style-black-000000?style=for-the-badge&?link=https://github.com/psf/black)
-![license](https://img.shields.io/github/license/Vertyco/red-postgres?style=for-the-badge)
+![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?logo=postgresql&logoColor=white)
+![Red-DiscordBot](https://img.shields.io/badge/Red%20DiscordBot-V3.5-red)
 
-![Forks](https://img.shields.io/github/forks/Vertyco/red-postgres?style=for-the-badge&color=9cf)
-![Stars](https://img.shields.io/github/stars/Vertyco/red-postgres?style=for-the-badge&color=yellow)
-![Lines of code](https://img.shields.io/tokei/lines/github/Vertyco/red-postgres?color=ff69b4&label=Lines&style=for-the-badge)
+![black](https://img.shields.io/badge/style-black-000000?link=https://github.com/psf/black)
+![license](https://img.shields.io/github/license/Vertyco/red-postgres)
 
 # Install
 
@@ -60,24 +58,20 @@ class PiccoloTemplate(commands.Cog):
     async def setup(self):
         await self.bot.wait_until_red_ready()
         config = await self.bot.get_shared_api_tokens("piccolo")
-
-        # Pass the root directory of the cog
-        cog_root = Path(__file__).parent
-
-        self.db = await register_cog(cog_root, config, [MyTable])
+        self.db = await register_cog(self, config, [MyTable])
 
     async def cog_unload(self):
         if self.db:
-            await self.db.close_connection_pool()
+            self.db.pool.terminate()
 ```
 
-The shared api token config for piccolo should be the following:
+The config for piccolo should have the following keys:
 
 ```json
 {
   "database": "database_name",
-  "host": "host ip (127.0.0.1)",
-  "port": "port (5432)",
+  "host": "127.0.0.1",  # Replace with your host
+  "port": "5432",
   "user": "user123",
   "password": "password123"
 }
@@ -99,7 +93,7 @@ objects = await MyTable.objects().where(MyTable.text == "Hello World")
 
 The engine associated with your tables after registering the cog is connected to the database named the same as the cog that registered them, thus using this integration with multiple cogs will not interfere, as each cog will create its own database.
 
-- _If your cog's folder name is `MyCog` then the database will be named `my_cog`_
+- _If your cog's folder name is `MyCog` then the database will be named `mycog`_
 
 # Piccolo Configuration Files
 
@@ -139,7 +133,7 @@ from piccolo.conf.apps import AppConfig, table_finder
 CURRENT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 APP_CONFIG = AppConfig(
-    app_name="cog_name",
+    app_name="cogname",
     table_classes=table_finder(["db.tables"]),
     migrations_folder_path=os.path.join(CURRENT_DIRECTORY, "migrations"),
 )
@@ -151,49 +145,47 @@ for `table_classes` add in the list of tables you're using
 
 Handing migrations is up to you, but one way to do it is to make migrations locally like so:
 
+First make an `.env` file.
+
+```env
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=user
+POSTGRES_PASSWORD=password123!
+POSTGRES_DATABASE=templatecog
+```
+
+Then create a file in your cog folder.
+
 ```python
+import asyncio
 import os
-import subprocess
 from pathlib import Path
 
+from dotenv import load_dotenv
+from red_postgres import engine
+
+load_dotenv()  # Loads the .env file
+
+config = {
+    "host": os.environ.get("POSTGRES_HOST"),
+    "port": os.environ.get("POSTGRES_PORT"),
+    "user": os.environ.get("POSTGRES_USER"),
+    "password": os.environ.get("POSTGRES_PASSWORD"),
+    "database": os.environ.get("POSTGRES_DATABASE"),
+}
+
 root = Path(__file__).parent
-env = os.environ.copy()
-env["PICCOLO_CONF"] = "db.piccolo_conf"
-env["POSTGRES_HOST"] = "localhost"
-env["POSTGRES_PORT"] = "5432"
-env["POSTGRES_USER"] = "user"
-env["POSTGRES_PASSWORD"] = "password123!"
-env["POSTGRES_DATABASE"] = "templatecog"
-env["PYTHONIOENCODING"] = "utf-8"
 
-
-def make():
-    migration_result = subprocess.run(
-        ["piccolo", "migrations", "new", root.name, "--auto"],
-        env=env,
-        cwd=root,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    ).stdout.decode()
-    print(migration_result)
-
-
-def run():
-    run_result = subprocess.run(
-        ["piccolo", "migrations", "forward", root.name],
-        env=env,
-        cwd=root,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    ).stdout.decode()
-    print(run_result)
+async def main():
+    created = await engine.ensure_database_exists(root, config)
+    print(f"Database created: {created}")
+    print(await engine.create_migrations(root, config, True))
+    print(await engine.run_migrations(root, config, True))
 
 
 if __name__ == "__main__":
-    make()
-    run()
+    asyncio.run(main())
 
 ```
 
