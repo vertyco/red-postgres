@@ -1,3 +1,9 @@
+# [0.5.1] (2024-11-17)
+
+## Changes
+
+- Fixed case where Path object is passed to `register_cog` while the database doesnt exist yet, causing an AttributeError.
+
 # [0.5.0] (2024-11-17)
 
 ## Changes

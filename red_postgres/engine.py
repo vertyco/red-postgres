@@ -51,7 +51,7 @@ async def register_cog(
         raise DirectoryError(f"Cog files are not in a valid directory: {cog_path}")
 
     if await ensure_database_exists(cog_instance, config):
-        log.info(f"New database created for {cog_instance.qualified_name}")
+        log.info(f"New database created for {_db_name(cog_instance)}!")
 
     log.info("Running migrations, if any")
     result = await run_migrations(cog_instance, config, trace)

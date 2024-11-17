@@ -5,8 +5,10 @@ from piccolo.engine.postgres import PostgresEngine
 from tests.tables import TABLES
 from piccolo.utils.sync import run_sync
 import os
-from red_postgres.engine import register_cog, run_migrations, create_migrations, diagnose_issues, ensure_database_exists, acquire_db_engine
+from red_postgres.engine import register_cog, run_migrations, create_migrations, diagnose_issues, ensure_database_exists, _acquire_db_engine
+from dotenv import load_dotenv
 
+load_dotenv()
 
 config={
     "user": os.environ.get("POSTGRES_USER"),
@@ -20,11 +22,11 @@ root = Path(__file__).parent
 class TestCrud(TestCase):
 
     def setUp(self):
-        engine = run_sync(acquire_db_engine(config))
+        engine = run_sync(_acquire_db_engine(config, ("uuid-ossp",)))
         run_sync(engine._run_in_new_connection("DROP DATABASE IF EXISTS tests WITH (FORCE)"))
 
     def tearDown(self):
-        engine = run_sync(acquire_db_engine(config))
+        engine = run_sync(_acquire_db_engine(config, ("uuid-ossp",)))
         run_sync(engine._run_in_new_connection("DROP DATABASE IF EXISTS tests WITH (FORCE)"))
         
     def test_ensure_database_exists(self):
