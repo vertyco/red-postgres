@@ -69,11 +69,11 @@ The config for piccolo should have the following keys:
 
 ```json
 {
-  "database": "database_name",
+  "database": "postgres",  # Replace with your maintenance database
   "host": "127.0.0.1",  # Replace with your host
-  "port": "5432",
-  "user": "user123",
-  "password": "password123"
+  "port": "5432",  # Replace with your port
+  "user": "postgres",  # Replace with your user
+  "password": "postgres"  # Replace with your password
 }
 ```
 
@@ -133,7 +133,7 @@ from piccolo.conf.apps import AppConfig, table_finder
 CURRENT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 APP_CONFIG = AppConfig(
-    app_name="cogname",
+    app_name="cogname",  # Replace with your cog name
     table_classes=table_finder(["db.tables"]),
     migrations_folder_path=os.path.join(CURRENT_DIRECTORY, "migrations"),
 )
@@ -161,26 +161,27 @@ Then create a `build.py` file in your cog folder.
 import asyncio
 import os
 from pathlib import Path
-
 from dotenv import load_dotenv
-from red_postgres import engine
+from engine import engine
 
-load_dotenv()  # Loads the .env file
+load_dotenv()
 
 config = {
-    "host": os.environ.get("POSTGRES_HOST"),
-    "port": os.environ.get("POSTGRES_PORT"),
     "user": os.environ.get("POSTGRES_USER"),
     "password": os.environ.get("POSTGRES_PASSWORD"),
     "database": os.environ.get("POSTGRES_DATABASE"),
+    "host": os.environ.get("POSTGRES_HOST"),
+    "port": os.environ.get("POSTGRES_PORT"),
 }
 
 root = Path(__file__).parent
 
+
 async def main():
     created = await engine.ensure_database_exists(root, config)
     print(f"Database created: {created}")
-    print(await engine.create_migrations(root, config, True))
+    description = input("Enter a description for the migration: ")
+    print(await engine.create_migrations(root, config, True, description.replace('"', "")))
     print(await engine.run_migrations(root, config, True))
 
 

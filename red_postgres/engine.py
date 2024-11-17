@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 import asyncpg
-from discord.ext import commands
+from discord.ext.commands import Cog
 from piccolo.engine.postgres import PostgresEngine
 from piccolo.table import Table
 
@@ -18,22 +18,22 @@ piccolo_path = Path(sys.executable).parent / "piccolo"
 
 
 async def register_cog(
-    cog_instance: commands.Cog | Path,
+    cog_instance: Cog | Path,
     config: dict,
     tables: list[type[Table]],
     pool_size: int = 20,
     trace: bool = False,
-    extensions: list[str] = None,
-) -> PostgresEngine:
+    extensions: list[str] = ("uuid-ossp",),
+):
     """Registers a Discord cog with a database connection and runs migrations.
 
     Args:
-        cog_instance (commands.Cog | Path): The instance/path of the cog to register.
+        cog_instance (Cog | Path): The instance/path of the cog to register.
         config (dict): Configuration dictionary containing database connection details.
         tables (list[type[Table]]): List of Piccolo Table classes to associate with the database engine.
         pool_size (int, optional): Maximum size of the database connection pool. Defaults to 20.
         trace (bool, optional): Whether to enable tracing for migrations. Defaults to False.
-        extensions (list[str], optional): List of Postgres extensions to enable. Defaults to None.
+        extensions (list[str], optional): List of Postgres extensions to enable. Defaults to ("uuid-ossp",).
 
     Raises:
         UNCPathError: If the cog path is a UNC path, which is not supported.
@@ -51,67 +51,50 @@ async def register_cog(
         raise DirectoryError(f"Cog files are not in a valid directory: {cog_path}")
 
     if await ensure_database_exists(cog_instance, config):
-        log.info(f"New database created for {_db_name(cog_instance)} ✓")
+        log.info(f"New database created for {cog_instance.qualified_name}")
 
     log.info("Running migrations, if any")
     result = await run_migrations(cog_instance, config, trace)
     if "No migrations need to be run" in result:
-        log.info("No migrations needed ✓")
+        log.info("No migrations needed!")
     else:
         log.info(f"Migration result...\n{result}")
 
     temp_config = config.copy()
     temp_config["database"] = _db_name(cog_instance)
     log.debug("Fetching database engine")
-    engine = await acquire_db_engine(temp_config, extensions)
+    engine = await _acquire_db_engine(temp_config, extensions)
     log.debug("Database engine acquired, starting pool")
     await engine.start_connection_pool(max_size=pool_size)
-    log.info("Database connection pool started ✓")
+    log.info("Database connection pool started!")
     for table_class in tables:
         table_class._meta.db = engine
     return engine
 
 
 async def run_migrations(
-    cog_instance: commands.Cog | Path,
+    cog_instance: Cog | Path,
     config: dict,
     trace: bool = False,
 ) -> str:
     """Runs database migrations for a given Discord cog.
 
     Args:
-        cog_instance (commands.Cog | Path): The instance of the cog for which to run migrations.
+        cog_instance (Cog | Path): The instance of the cog for which to run migrations.
         config (dict): Configuration dictionary containing database connection details.
         trace (bool, optional): Whether to enable tracing for migrations. Defaults to False.
 
     Returns:
         str: The result of the migration process, including any output messages.
     """
-    temp_config = config.copy()
-    temp_config["database"] = _db_name(cog_instance)
     commands = [str(piccolo_path), "migrations", "forwards", _root(cog_instance).stem]
     if trace:
         commands.append("--trace")
-
-    def _exe():
-        return (
-            subprocess.run(
-                commands,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=False,
-                cwd=str(_root(cog_instance)),
-                env=_get_env(temp_config),
-            )
-            .stdout.decode()
-            .replace("👍", "✓")
-        )
-
-    return await asyncio.to_thread(_exe)
+    return await _shell(cog_instance, config, commands, False)
 
 
 async def reverse_migration(
-    cog_instance: commands.Cog | Path,
+    cog_instance: Cog | Path,
     config: dict,
     timestamp: str,
     trace: bool = False,
@@ -119,7 +102,7 @@ async def reverse_migration(
     """Reverses a database migration for a given Discord cog to a specific timestamp.
 
     Args:
-        cog_instance (commands.Cog | Path): The instance of the cog for which to reverse the migration.
+        cog_instance (Cog | Path): The instance of the cog for which to reverse the migration.
         config (dict): Configuration dictionary containing database connection details.
         timestamp (str): The timestamp to which the migration should be reversed.
         trace (bool, optional): Whether to enable tracing for migrations. Defaults to False.
@@ -127,8 +110,6 @@ async def reverse_migration(
     Returns:
         str: The result of the reverse migration process, including any output messages.
     """
-    temp_config = config.copy()
-    temp_config["database"] = _db_name(cog_instance)
     commands = [
         str(piccolo_path),
         "migrations",
@@ -139,41 +120,28 @@ async def reverse_migration(
     if trace:
         commands.append("--trace")
 
-    def _exe():
-        return (
-            subprocess.run(
-                commands,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=False,
-                cwd=str(_root(cog_instance)),
-                env=_get_env(temp_config),
-            )
-            .stdout.decode()
-            .replace("👍", "✓")
-        )
-
-    return await asyncio.to_thread(_exe)
+    return await _shell(cog_instance, config, commands, False)
 
 
 async def create_migrations(
-    cog_instance: commands.Cog | Path,
+    cog_instance: Cog | Path,
     config: dict,
     trace: bool = False,
+    description: str = None,
 ) -> str:
     """Creates new database migrations for a given Discord cog.
 
     THIS SHOULD BE RUN MANUALLY!
 
     Args:
-        cog_instance (commands.Cog | Path): The instance of the cog for which to create migrations.
+        cog_instance (Cog | Path | str): The instance of the cog for which to create migrations.
         config (dict): Configuration dictionary containing database connection details.
+        trace (bool, optional): Whether to enable tracing for migrations. Defaults to False.
+        description (str, optional): Description for the migration. Defaults to None.
 
     Returns:
         str: The result of the migration creation process, including any output messages.
     """
-    temp_config = config.copy()
-    temp_config["database"] = _db_name(cog_instance)
     commands = [
         str(piccolo_path),
         "migrations",
@@ -183,74 +151,44 @@ async def create_migrations(
     ]
     if trace:
         commands.append("--trace")
+    if description is not None:
+        commands.append(f'--desc="{description}"')
 
-    def _exe():
-        return (
-            subprocess.run(
-                commands,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
-                cwd=str(_root(cog_instance)),
-                env=_get_env(temp_config),
-            )
-            .stdout.decode()
-            .replace("👍", "✓")
-        )
-
-    return await asyncio.to_thread(_exe)
+    return await _shell(cog_instance, config, commands, True)
 
 
-async def diagnose_issues(cog_instance: commands.Cog | Path, config: dict) -> str:
+async def diagnose_issues(cog_instance: Cog | Path, config: dict) -> str:
     """Diagnoses potential issues with the database setup for a given Discord cog.
 
     Args:
-        cog_instance (commands.Cog | Path): The instance of the cog for which to diagnose issues.
+        cog_instance (Cog | Path): The instance of the cog for which to diagnose issues.
         config (dict): Configuration dictionary containing database connection details.
 
     Returns:
         str: A report of the diagnosis and migration check results.
     """
-    temp_config = config.copy()
-    temp_config["database"] = _db_name(cog_instance)
-
-    def _exe():
-        diagnoses = subprocess.run(
-            [str(piccolo_path), "--diagnose"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=False,
-            cwd=str(_root(cog_instance)),
-            env=_get_env(temp_config),
-        ).stdout.decode()
-        check = subprocess.run(
-            [str(piccolo_path), "migrations", "check"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=False,
-            cwd=str(_root(cog_instance)),
-            env=_get_env(temp_config),
-        ).stdout.decode()
-        return f"{diagnoses}\n{check}"
-
-    return await asyncio.to_thread(_exe)
+    diagnoses = await _shell(
+        cog_instance, config, [str(piccolo_path), "--diagnose"], False
+    )
+    check = await _shell(
+        cog_instance, config, [str(piccolo_path), "migrations", "check"], False
+    )
+    return f"{diagnoses}\n{check}"
 
 
-async def ensure_database_exists(
-    cog_instance: commands.Cog | Path, config: dict
-) -> bool:
+async def ensure_database_exists(cog_instance: Cog | Path, config: dict) -> bool:
     """Create a database for the cog if it doesn't exist.
 
     Args:
-        cog_instance (commands.Cog | Path): The cog instance
+        cog_instance (Cog | Path): The cog instance
         config (dict): the database connection information
 
     Returns:
         bool: True if a new database was created
     """
     conn = await asyncpg.connect(**config, timeout=10)
+    database_name = _db_name(cog_instance)
     try:
-        database_name = _db_name(cog_instance)
         databases = await conn.fetch("SELECT datname FROM pg_database;")
         if database_name not in [db["datname"] for db in databases]:
             await conn.execute(f"CREATE DATABASE {database_name};")
@@ -260,33 +198,51 @@ async def ensure_database_exists(
     return False
 
 
-async def acquire_db_engine(
-    config: dict, extensions: list[str] = None
-) -> PostgresEngine:
+async def _acquire_db_engine(config: dict, extensions: list[str]) -> PostgresEngine:
     """Acquire a database engine
     The PostgresEngine constructor is blocking and must be run in a separate thread.
 
     Args:
         config (dict): The database connection information
+        extensions (list[str]): The Postgres extensions to enable
 
     Returns:
         PostgresEngine: The database engine
     """
-
-    def _acquire(config: dict) -> PostgresEngine:
-        return PostgresEngine(
-            config=config, extensions=extensions if extensions else ()
-        )
-
     try:
         async with asyncio.timeout(10):
-            engine = await asyncio.to_thread(_acquire, config)
-            return engine
+            return await asyncio.to_thread(
+                PostgresEngine, config=config, extensions=extensions
+            )
     except asyncio.TimeoutError:
         raise ConnectionTimeoutError("Database took longer than 10 seconds to connect!")
 
 
-def _root(cog_instance: commands.Cog | Path) -> Path:
+async def _shell(
+    cog_instance: Cog | Path,
+    config: dict,
+    commands: list[str],
+    is_shell: bool,
+) -> str:
+    """Run a shell command in a separate thread"""
+
+    def _exe() -> str:
+        temp_config = config.copy()
+        temp_config["database"] = _db_name(cog_instance)
+        res = subprocess.run(
+            commands,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=is_shell,
+            cwd=str(_root(cog_instance)),
+            env=_get_env(temp_config),
+        )
+        return res.stdout.decode(encoding="utf-8", errors="ignore").replace("👍", "!")
+
+    return await asyncio.to_thread(_exe)
+
+
+def _root(cog_instance: Cog | Path) -> Path:
     """Get the root path of the cog"""
     if isinstance(cog_instance, Path):
         return cog_instance
@@ -307,7 +263,7 @@ def _get_env(config: dict) -> dict:
     return env
 
 
-def _db_name(cog_instance: commands.Cog | Path) -> str:
+def _db_name(cog_instance: Cog | Path) -> str:
     """Get the name of the database for the cog"""
     if isinstance(cog_instance, Path):
         return cog_instance.stem.lower()

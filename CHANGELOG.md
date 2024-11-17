@@ -1,3 +1,13 @@
+# [0.5.0] (2024-11-17)
+
+## Changes
+
+- Refactored internal engine code to be more modular and easier to maintain.
+
+## Breaking Changes
+
+- `aquire_db_engine` has been changed to a private method (`_acquire_db_engine`) and is no longer accessible.
+
 # [0.4.0] (2024-18-28)
 
 ## Breaking Changes
