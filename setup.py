@@ -27,6 +27,9 @@ setup(
         "async",
         "asyncpg",
         "orm",
+        "red",
+        "redbot",
+        "red-discordbot",
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -44,7 +47,7 @@ setup(
         "Topic :: Utilities",
         "Typing :: Typed",
     ],
-    install_requires=["piccolo[postgres]>=1.0.0", "discord.py"],
+    install_requires=["piccolo[postgres]>=1.0.0", "discord.py", "Red-DiscordBot"],
     python_requires=">=3.10",
     project_urls={
         "Homepage": "https://github.com/vertyco/red-postgres",

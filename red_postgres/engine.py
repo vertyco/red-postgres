@@ -152,7 +152,7 @@ async def create_migrations(
     if trace:
         commands.append("--trace")
     if description is not None:
-        commands.append(f'--desc="{description}"')
+        commands.append(f"--desc={description}")
 
     return await _shell(cog_instance, config, commands, True)
 
@@ -235,7 +235,7 @@ async def _shell(
             stderr=subprocess.PIPE,
             shell=is_shell,
             cwd=str(_root(cog_instance)),
-            env=_get_env(temp_config),
+            env=_get_env(cog_instance, temp_config),
         )
         return res.stdout.decode(encoding="utf-8", errors="ignore").replace("👍", "!")
 
@@ -249,7 +249,7 @@ def _root(cog_instance: Cog | Path) -> Path:
     return Path(inspect.getfile(cog_instance.__class__)).parent
 
 
-def _get_env(config: dict) -> dict:
+def _get_env(cog_instance: Cog | Path, config: dict) -> dict:
     """Create mock environment for subprocess"""
     env = os.environ.copy()
     env["PICCOLO_CONF"] = "db.piccolo_conf"
@@ -258,6 +258,7 @@ def _get_env(config: dict) -> dict:
     env["POSTGRES_USER"] = config.get("user")
     env["POSTGRES_PASSWORD"] = config.get("password")
     env["POSTGRES_DATABASE"] = config.get("database")
+    env["APP_NAME"] = _root(cog_instance).stem
     if _is_windows():
         env["PYTHONIOENCODING"] = "utf-8"
     return env

@@ -133,7 +133,7 @@ from piccolo.conf.apps import AppConfig, table_finder
 CURRENT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 APP_CONFIG = AppConfig(
-    app_name="cogname",  # Replace with your cog name
+    app_name=os.getenv("APP_NAME"),
     table_classes=table_finder(["db.tables"]),
     migrations_folder_path=os.path.join(CURRENT_DIRECTORY, "migrations"),
 )
@@ -181,7 +181,7 @@ async def main():
     created = await engine.ensure_database_exists(root, config)
     print(f"Database created: {created}")
     description = input("Enter a description for the migration: ")
-    print(await engine.create_migrations(root, config, True, description.replace('"', "")))
+    print(await engine.create_migrations(root, config, True, description))
     print(await engine.run_migrations(root, config, True))
 
 
